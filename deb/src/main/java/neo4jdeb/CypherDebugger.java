@@ -32,7 +32,7 @@ public class CypherDebugger {
         driver.close();
     }
 
-    
+
 
     public void debug(String cypherQuery) {
         System.out.println("\n--- 🔍 STARTING CYPHER DEBUG SESSION ---");
@@ -73,6 +73,8 @@ public class CypherDebugger {
         }
     }
 });
+
+
 
         try (Session session = driver.session()) {
             // 2. Schema Validation
