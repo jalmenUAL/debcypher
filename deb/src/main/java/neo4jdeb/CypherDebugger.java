@@ -286,8 +286,7 @@ public class CypherDebugger {
 
         // Example with a logical condition that might fail (e.g., movies from the
         // future)
-        String testQuery = "MATCH (:Person {name:'Keanu Reeves'})-[r:!ACTED_IN]->(m:Movie)\n" + //
-                "RETURN type(r) AS type, m.title AS movies";
+        String testQuery = "MATCH (p:Person {name: 'Martin Sheen'}) OPTIONAL MATCH (p)-[r:DIRECTED]->() RETURN p.name, r";
 
         debugger.debug(testQuery);
         debugger.close();
