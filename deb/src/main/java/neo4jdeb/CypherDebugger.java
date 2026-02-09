@@ -32,6 +32,8 @@ public class CypherDebugger {
         driver.close();
     }
 
+    
+
     public void debug(String cypherQuery) {
         System.out.println("\n--- 🔍 STARTING CYPHER DEBUG SESSION ---");
         System.out.println("Query: " + cypherQuery);
