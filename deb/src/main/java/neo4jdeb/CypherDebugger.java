@@ -6,12 +6,15 @@ import java.util.Set;
 import java.util.ArrayList;
 
 import org.neo4j.cypherdsl.core.Comparison;
+import org.neo4j.cypherdsl.core.Cypher;
 import org.neo4j.cypherdsl.core.Node;
 import org.neo4j.cypherdsl.core.NodeLabel;
 import org.neo4j.cypherdsl.core.Property;
 import org.neo4j.cypherdsl.core.Relationship;
 import org.neo4j.cypherdsl.core.Relationship.Direction;
 import org.neo4j.cypherdsl.core.Statement;
+import org.neo4j.cypherdsl.core.renderer.Configuration;
+import org.neo4j.cypherdsl.core.renderer.Renderer;
 import org.neo4j.cypherdsl.parser.CypherParser;
 import org.neo4j.driver.AuthTokens;
 import org.neo4j.driver.Driver;
@@ -40,7 +43,7 @@ public class CypherDebugger {
         try {
             statement = CypherParser.parse(cypherQuery);
         } catch (Exception e) {
-            System.err.println("❌ SYNTAX ERROR: The query could not be parsed. Check brackets and keywords.");
+            System.err.println("SYNTAX ERROR: The query could not be parsed. Check brackets and keywords.");
             return;
         }
 
@@ -91,8 +94,7 @@ public class CypherDebugger {
     private void checkPathConnectivity(Session session, String query) {
         Statement statement = CypherParser.parse(query);
 
-        // Lista para evitar procesar la misma relación varias veces
-        Set<String> processedPaths = new HashSet<>();
+         
 
         statement.accept(segment -> {
             if (segment instanceof Relationship rel) {
@@ -281,14 +283,23 @@ public class CypherDebugger {
         return dp[x.length()][y.length()];
     }
 
+
+    
+
+ 
+
     public static void main(String[] args) {
         CypherDebugger debugger = new CypherDebugger("bolt://localhost:7687", "neo4j", "neo4jalmeria00");
 
         // Example with a logical condition that might fail (e.g., movies from the
         // future)
-        String testQuery = "MATCH (p:Person {name: 'Martin Sheen'}) OPTIONAL MATCH (p)-[r:DIRECTED]->() RETURN p.name, r";
+       /*  String testQuery = "MATCH (p:Person {name: \"Tom Hanks\"})-[:ACTED_IN]\n" + //
+                        "->(m:Movie)<-[:DIRECTED]-(d:Person {name: \"Christopher Nolan\"})\n" + //
+                        "WHERE m.released > 2010 RETURN m.title";
 
         debugger.debug(testQuery);
         debugger.close();
+
+        */
     }
 }
