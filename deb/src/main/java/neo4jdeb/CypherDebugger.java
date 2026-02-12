@@ -132,7 +132,7 @@ public class CypherDebugger {
     }
 
     private void runDeepConnectivityCheck(Session session, String start, String type, String end) {
-        System.out.println(String.format("\n🧐 Analyzing: (:%s)-[:%s]-(:%s)", start, type, end));
+        System.out.println(String.format("\n Analyzing: (:%s)-[:%s]-(:%s)", start, type, end));
 
         // 1. Test for Reversed Direction
         String reverseQ = String.format("MATCH (a:%s)<-[:%s]-(b:%s) RETURN count(*) > 0 AS ok LIMIT 1", start, type,
@@ -140,7 +140,7 @@ public class CypherDebugger {
         System.out.println("   🔄 Checking for reversed relationship...");
         System.out.println("      Query: " + reverseQ);
         if (session.run(reverseQ).single().get("ok").asBoolean()) {
-            System.err.println("   ❌ DIRECTION ERROR: The relationship exists but the arrow is reversed.");
+            System.err.println("   DIRECTION ERROR: The relationship exists but the arrow is reversed.");
             System.err.println(String.format("      👉 FIX: (:%s)<-[:%s]-(:%s)", start, type, end));
             return;
         }
@@ -159,13 +159,13 @@ public class CypherDebugger {
             String t1 = rec.get("t1").asString();
             String t2 = rec.get("t2").asString();
 
-            System.err.println("   ⚠️ INDIRECT RELATIONSHIP DETECTED:");
+            System.err.println("   INDIRECT RELATIONSHIP DETECTED:");
             System.err.println(
                     String.format("      Nodes are not linked by [:%s], but they share a (:%s) node.", type, mid));
             System.err.println(
-                    String.format("      👉 SUGGESTED MATCH: (:%s)-[:%s]-(:%s)-[:%s]-(:%s)", start, t1, mid, t2, end));
+                    String.format("     SUGGESTED MATCH: (:%s)-[:%s]-(:%s)-[:%s]-(:%s)", start, t1, mid, t2, end));
         } else {
-            System.err.println("   💔 DISCONNECTED: No direct or indirect connection found within 2 hops.");
+            System.err.println("   DISCONNECTED: No direct or indirect connection found within 2 hops.");
         }
     }
 
@@ -201,10 +201,10 @@ public class CypherDebugger {
             try {
                 boolean isPossible = session.run(testQuery).single().get("possible").asBoolean();
                 if (!isPossible) {
-                    System.err.println("❌ LOGIC ERROR: [" + cleanCondition + "] returns 0 results.");
+                    System.err.println("LOGIC ERROR: [" + cleanCondition + "] returns 0 results.");
                 }
             } catch (Exception e) {
-                System.err.println("⚠️ Complex condition: " + cleanCondition);
+                System.err.println("Complex condition: " + cleanCondition);
             }
         }
     }
@@ -222,12 +222,12 @@ public class CypherDebugger {
 
                 // Basic detection: if the condition has quotes but the DB is INTEGER
                 if (actualType.equals("INTEGER") && (condition.contains("'") || condition.contains("\""))) {
-                    System.err.println("⚠️  TYPE MISMATCH: Property '" + propertyName +
+                    System.err.println("TYPE MISMATCH: Property '" + propertyName +
                             "' is an INTEGER in the DB, but you are comparing it to a STRING.");
                 }
                 // Basic detection: if the condition is numeric but the DB is STRING
                 else if (actualType.equals("STRING") && condition.matches(".*\\.\\w+\\s*[=><!]+\\s*\\d+.*")) {
-                    System.err.println("⚠️  TYPE MISMATCH: Property '" + propertyName +
+                    System.err.println("TYPE MISMATCH: Property '" + propertyName +
                             "' is a STRING in the DB, but you are comparing it to a NUMBER.");
                 }
             }
@@ -240,10 +240,10 @@ public class CypherDebugger {
         List<String> existing = session.run(fetchQuery).list(r -> r.get(0).asString());
         for (String item : items) {
             if (existing.contains(item)) {
-                System.out.println("✅ " + typeLabel + ": '" + item + "' exists.");
+                System.out.println(typeLabel + ": '" + item + "' exists.");
             } else {
                 String suggestion = findClosestMatch(item, existing);
-                String msg = "❌ " + typeLabel + " ERROR: '" + item + "' not found.";
+                String msg = typeLabel + " ERROR: '" + item + "' not found.";
                 if (suggestion != null)
                     msg += " -> Did you mean '" + suggestion + "'?";
                 System.err.println(msg);
