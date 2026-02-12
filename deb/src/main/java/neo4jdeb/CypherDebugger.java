@@ -1,27 +1,30 @@
 package neo4jdeb;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.neo4j.cypherdsl.core.Comparison;
+import org.neo4j.cypherdsl.core.ConstantCondition;
 import org.neo4j.cypherdsl.core.Cypher;
 import org.neo4j.cypherdsl.core.Node;
 import org.neo4j.cypherdsl.core.NodeLabel;
+import org.neo4j.cypherdsl.core.PatternElement;
 import org.neo4j.cypherdsl.core.Property;
 import org.neo4j.cypherdsl.core.Relationship;
 import org.neo4j.cypherdsl.core.Relationship.Direction;
 import org.neo4j.cypherdsl.core.Statement;
-import org.neo4j.cypherdsl.core.renderer.Configuration;
+import org.neo4j.cypherdsl.core.Where;
 import org.neo4j.cypherdsl.core.renderer.Renderer;
 import org.neo4j.cypherdsl.parser.CypherParser;
 import org.neo4j.driver.AuthTokens;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.GraphDatabase;
+import org.neo4j.driver.Record;
 import org.neo4j.driver.Result;
 import org.neo4j.driver.Session;
-import org.neo4j.driver.Record;
 
 public class CypherDebugger {
 
@@ -283,7 +286,51 @@ public class CypherDebugger {
         return dp[x.length()][y.length()];
     }
 
+   public List<String> decompose(Statement statement) {
+    List<String> trace = new ArrayList<>();
+    Renderer renderer = Renderer.getDefaultRenderer();
 
+    final List<PatternElement> patterns = new ArrayList<>();
+    // Use the base 'Condition' type, which is what where clauses actually hold
+    final AtomicReference<ConstantCondition> extractedCondition = new AtomicReference<>();
+
+    statement.accept(segment -> {
+        if (segment instanceof Node n) {
+            patterns.add(n);
+        } else if (segment instanceof Relationship r) {
+            patterns.add(r);
+        } else if (segment instanceof ConstantCondition c) {
+            // This catches the logic inside the WHERE clause directly
+            // We only take the first one or combine them if needed
+            extractedCondition.set(c);
+        }
+    });
+
+    // (a) Anchor Node
+    Node anchor = (Node) patterns.get(0);
+    trace.add(renderer.render(Cypher.match(anchor).returning(anchor).build()));
+
+    // (b) & (c) Build the path
+    Relationship lastRel = null;
+    for (PatternElement p : patterns) {
+        if (p instanceof Relationship rel) {
+            lastRel = rel;
+            trace.add(renderer.render(Cypher.match(rel).returning(rel).build()));
+        }
+    }
+
+    // (d) Apply the extracted Condition
+    if (extractedCondition.get() != null && lastRel != null) {
+        trace.add(renderer.render(
+            Cypher.match(lastRel)
+                  .where(extractedCondition.get())
+                  .returning(lastRel)
+                  .build()
+        ));
+    }
+
+    return trace;
+}
     
 
  
