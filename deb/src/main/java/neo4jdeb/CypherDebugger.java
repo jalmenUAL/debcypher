@@ -4,11 +4,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.neo4j.cypherdsl.core.Comparison;
-import org.neo4j.cypherdsl.core.ConstantCondition;
+import org.neo4j.cypherdsl.core.Condition;
 import org.neo4j.cypherdsl.core.Cypher;
+import org.neo4j.cypherdsl.core.Expression;
 import org.neo4j.cypherdsl.core.Node;
 import org.neo4j.cypherdsl.core.NodeLabel;
 import org.neo4j.cypherdsl.core.PatternElement;
@@ -16,7 +16,6 @@ import org.neo4j.cypherdsl.core.Property;
 import org.neo4j.cypherdsl.core.Relationship;
 import org.neo4j.cypherdsl.core.Relationship.Direction;
 import org.neo4j.cypherdsl.core.Statement;
-import org.neo4j.cypherdsl.core.Where;
 import org.neo4j.cypherdsl.core.renderer.Renderer;
 import org.neo4j.cypherdsl.parser.CypherParser;
 import org.neo4j.driver.AuthTokens;
@@ -64,15 +63,15 @@ public class CypherDebugger {
             } else if (segment instanceof Relationship.Details d) {
                 relationshipTypes.addAll(d.getTypes());
             } else if (segment instanceof Comparison) {
-                // 1. Get the raw string: Comparison{cypher=m.year > 2010}
+                
                 String raw = segment.toString();
 
-                // 2. Extract only what is inside cypher=...
+                
                 if (raw.contains("cypher=")) {
                     String cleanCondition = raw.substring(raw.indexOf("cypher=") + 7, raw.lastIndexOf("}"));
                     conditions.add(cleanCondition);
                 } else {
-                    // Fallback for different versions/formats
+                     
                     conditions.add(raw);
                 }
             }
@@ -129,11 +128,11 @@ public class CypherDebugger {
     }
 
     private String extractLabel(Node node) {
-        return node.getLabels() // 1. Obtiene la colección de etiquetas del nodo
-                .stream() // 2. Abre un flujo para procesarlas
-                .map(l -> l.getValue()) // 3. Convierte el objeto 'NodeLabel' a su valor String (ej: "Person")
-                .findFirst() // 4. Toma la primera etiqueta encontrada
-                .orElse(null); // 5. Si el nodo no tiene etiqueta (ej: '(n)'), devuelve null
+        return node.getLabels()  
+                .stream()  
+                .map(l -> l.getValue())  
+                .findFirst()  
+                .orElse(null);  
     }
 
     private void runDeepConnectivityCheck(Session session, String start, String type, String end) {
@@ -286,31 +285,36 @@ public class CypherDebugger {
         return dp[x.length()][y.length()];
     }
 
+
+    private boolean isTopLevelCondition(Object segment) {
+    // In 2025.2.3, these are the primary 'Why-Not' bottlenecks
+    return segment instanceof org.neo4j.cypherdsl.core.Comparison;
+}
+
    public List<String> decompose(Statement statement) {
     List<String> trace = new ArrayList<>();
     Renderer renderer = Renderer.getDefaultRenderer();
-
+    final List<Node> nodes = new ArrayList<>();
     final List<PatternElement> patterns = new ArrayList<>();
-    // Use the base 'Condition' type, which is what where clauses actually hold
-    final AtomicReference<ConstantCondition> extractedCondition = new AtomicReference<>();
+    final List <Expression> extractedCondition = new ArrayList<>();
 
     statement.accept(segment -> {
         if (segment instanceof Node n) {
-            patterns.add(n);
+            nodes.add(n);
         } else if (segment instanceof Relationship r) {
             patterns.add(r);
-        } else if (segment instanceof ConstantCondition c) {
-            // This catches the logic inside the WHERE clause directly
-            // We only take the first one or combine them if needed
-            extractedCondition.set(c);
+        } else if (segment instanceof Expression expr) {
+           if (isTopLevelCondition(segment)) {
+            extractedCondition.add(expr);
+        }
         }
     });
 
-    // (a) Anchor Node
-    Node anchor = (Node) patterns.get(0);
-    trace.add(renderer.render(Cypher.match(anchor).returning(anchor).build()));
-
-    // (b) & (c) Build the path
+   for (Node n : nodes) {
+        trace.add(renderer.render(Cypher.match(n).returning(n).build()));
+    }
+    
+   
     Relationship lastRel = null;
     for (PatternElement p : patterns) {
         if (p instanceof Relationship rel) {
@@ -319,15 +323,18 @@ public class CypherDebugger {
         }
     }
 
-    // (d) Apply the extracted Condition
-    if (extractedCondition.get() != null && lastRel != null) {
-        trace.add(renderer.render(
-            Cypher.match(lastRel)
-                  .where(extractedCondition.get())
-                  .returning(lastRel)
-                  .build()
-        ));
-    }
+for (Expression cond : extractedCondition) {
+    
+    Condition validCondition = cond.asCondition();
+
+    
+    trace.add(renderer.render(
+        Cypher.match(lastRel)
+              .where(validCondition)
+              .returning(lastRel)
+              .build()
+    ));
+}
 
     return trace;
 }
@@ -337,6 +344,12 @@ public class CypherDebugger {
 
     public static void main(String[] args) {
         CypherDebugger debugger = new CypherDebugger("bolt://localhost:7687", "neo4j", "neo4jalmeria00");
+
+        debugger.decompose(CypherParser.parse("MATCH (p:Person {name: \"Tom Hanks\"})-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(d:Person {name: \"Christopher Nolan\"}) WHERE m.released > 2010 RETURN m.title"))
+            .forEach(step -> {
+                System.out.println("\n--- Step ---");
+                System.out.println(step);
+            });
 
         // Example with a logical condition that might fail (e.g., movies from the
         // future)
