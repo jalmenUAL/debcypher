@@ -101,12 +101,12 @@ public class CypherDebugger {
                 try {
                     Result res = session.run(step.fullQuery);
                    if (res.hasNext()) {
-                        boolean exists = res.hasNext(); // Just check if it returns any result
-                        System.out.println("Step executed successfully. Results found: " + exists);
+                         
+                        System.out.println("Step executed successfully and returned results.");
                     } else {
                         System.out.println("The error is found in this step.");
-                        System.out.println("Executed Query: " + step.addedSegment);
-                        System.out.println("No results returned for this step, indicating a potential issue with the pattern or condition.");
+                        System.out.println("Executed Segment: " + step.addedSegment);
+                       //System.out.println("No results returned for this step, indicating a potential issue with the pattern or condition.");
                         return; // Stop further execution
 
 }
@@ -168,11 +168,11 @@ public class CypherDebugger {
         // 1. Test for Reversed Direction
         String reverseQ = String.format("MATCH (a:%s)<-[:%s]-(b:%s) RETURN count(*) > 0 AS ok LIMIT 1", start, type,
                 end);
-        System.out.println("   🔄 Checking for reversed relationship...");
+        System.out.println("   Checking for reversed relationship...");
         System.out.println("      Query: " + reverseQ);
         if (session.run(reverseQ).single().get("ok").asBoolean()) {
             System.err.println("   DIRECTION ERROR: The relationship exists but the arrow is reversed.");
-            System.err.println(String.format("      👉 FIX: (:%s)<-[:%s]-(:%s)", start, type, end));
+            System.err.println(String.format("      FIX: (:%s)<-[:%s]-(:%s)", start, type, end));
             return;
         }
 
@@ -314,7 +314,7 @@ public class CypherDebugger {
 
 
     private boolean isTopLevelCondition(Object segment) {
-    // In 2025.2.3, these are the primary 'Why-Not' bottlenecks
+    
     return segment instanceof org.neo4j.cypherdsl.core.Comparison;
 }
 
@@ -338,7 +338,7 @@ public class CypherDebugger {
     });
 
    for (Node n : nodes) {
-        trace.add(new TraceStep(trace.size(), renderer.render(Cypher.match(n).returning(n).build()), "Node: " + n.toString()));
+        trace.add(new TraceStep(trace.size(), renderer.render(Cypher.match(n).returning(n).build()),  n.getLabels().get(0).getValue() ));
     }
     
    
@@ -346,7 +346,7 @@ public class CypherDebugger {
     for (PatternElement p : patterns) {
         if (p instanceof Relationship rel) {
             lastRel = rel;
-            trace.add(new TraceStep(trace.size(), renderer.render(Cypher.match(rel).returning(rel).build()), "Relationship: " + rel.toString()));
+            trace.add(new TraceStep(trace.size(), renderer.render(Cypher.match(rel).returning(rel).build()),   rel.getDetails().getTypes().get(0)));
         }
     }
 
@@ -361,16 +361,18 @@ for (Expression cond : extractedCondition) {
               .returning(lastRel)
               .build()
     ), "Condition: " + validCondition));
+    trace.add(new TraceStep(trace.size(), renderer.render(statement),  validCondition.toString()));
 }
-    trace.add(new TraceStep(trace.size(), renderer.render(statement), "Full Query: " + statement.getCypher()));
+    
     return trace;
 }
+
 
  
 
     public static void main(String[] args) {
         CypherDebugger debugger = new CypherDebugger("bolt://localhost:7687", "neo4j", "neo4jalmeria00");
-        String testQuery = "MATCH (p:Person {name: \"Tom Hanks\"})-[:ACTED_IN]->(m:Movies)<-[:DIRECTED]-(d:Person {name: \"Christopher Nolan\"}) WHERE m.released > 2009 RETURN m.title";
+        String testQuery = "MATCH (p:Person {name: \"Tom Hanks\"})-[:ACTED_ON]->(m:Movie)<-[:DIRECTED]-(d:Person {name: \"Christopher Nolan\"}) WHERE m.released > 2005 RETURN m.title";
         debugger.debug(testQuery);
         debugger.close();
 
