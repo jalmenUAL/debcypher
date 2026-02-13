@@ -349,6 +349,24 @@ for (Expression cond : extractedCondition) {
             .forEach(step -> {
                 System.out.println("\n--- Step ---");
                 System.out.println(step);
+                Session session = debugger.driver.session();
+                try {
+                    Result res = session.run(step);
+                   if (res.hasNext()) {
+                        boolean exists = res.hasNext(); // Just check if it returns any result
+                        System.out.println("Step executed successfully. Results found: " + exists);
+                    } else {
+                        System.out.println("The error is found in this step.");
+                        System.out.println("No results returned for this step, indicating a potential issue with the pattern or condition.");
+                        return; // Stop further execution
+
+}
+                } catch (Exception e) {
+                    System.err.println("Error executing step: " + e.getMessage());
+                } finally {                    session.close();
+                } 
+           
+           
             });
 
         // Example with a logical condition that might fail (e.g., movies from the
