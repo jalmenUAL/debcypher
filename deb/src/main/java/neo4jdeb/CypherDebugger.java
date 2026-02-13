@@ -37,10 +37,22 @@ public class CypherDebugger {
         driver.close();
     }
 
+    public class TraceStep {
+    public final String fullQuery;    // The current Q_i
+    public final String addedSegment; // The specific e_i or v_i or Phi
+    public final int index;
+
+    public TraceStep(int index, String fullQuery, String addedSegment) {
+        this.index = index;
+        this.fullQuery = fullQuery;
+        this.addedSegment = addedSegment;
+    }
+}
+
+
     public void debug(String cypherQuery) {
         System.out.println("\n--- 🔍 STARTING CYPHER DEBUG SESSION ---");
         System.out.println("Query: " + cypherQuery);
-
         Statement statement;
         try {
             statement = CypherParser.parse(cypherQuery);
@@ -48,12 +60,10 @@ public class CypherDebugger {
             System.err.println("SYNTAX ERROR: The query could not be parsed. Check brackets and keywords.");
             return;
         }
-
         Set<String> properties = new HashSet<>();
         Set<String> labels = new HashSet<>();
         Set<String> relationshipTypes = new HashSet<>();
         List<String> conditions = new ArrayList<>();
-
         // 1. Extract Components and Syntactic Boolean Conditions
         statement.accept(segment -> {
             if (segment instanceof Property p) {
@@ -62,16 +72,12 @@ public class CypherDebugger {
                 labels.add(l.getValue());
             } else if (segment instanceof Relationship.Details d) {
                 relationshipTypes.addAll(d.getTypes());
-            } else if (segment instanceof Comparison) {
-                
+            } else if (segment instanceof Comparison) {          
                 String raw = segment.toString();
-
-                
                 if (raw.contains("cypher=")) {
                     String cleanCondition = raw.substring(raw.indexOf("cypher=") + 7, raw.lastIndexOf("}"));
                     conditions.add(cleanCondition);
-                } else {
-                     
+                } else {        
                     conditions.add(raw);
                 }
             }
@@ -82,14 +88,35 @@ public class CypherDebugger {
             validateSchema(session, labels, "CALL db.labels()", "Label/Class");
             validateSchema(session, relationshipTypes, "CALL db.relationshipTypes()", "Relationship Type");
             validateSchema(session, properties, "CALL db.propertyKeys()", "Property Key");
-
             // 3. Boolean Condition Validation
             validateBooleanConditions(session, conditions);
-
             // 4. Directional check
             checkPathConnectivity(session, cypherQuery);
-        }
+        
+            decompose(CypherParser.parse(cypherQuery))
+            .forEach(step -> {
+                System.out.println("\n--- Step ---");
+                System.out.println(step.fullQuery);
+                 
+                try {
+                    Result res = session.run(step.fullQuery);
+                   if (res.hasNext()) {
+                        boolean exists = res.hasNext(); // Just check if it returns any result
+                        System.out.println("Step executed successfully. Results found: " + exists);
+                    } else {
+                        System.out.println("The error is found in this step.");
+                        System.out.println("Executed Query: " + step.addedSegment);
+                        System.out.println("No results returned for this step, indicating a potential issue with the pattern or condition.");
+                        return; // Stop further execution
 
+}
+                } catch (Exception e) {
+                    System.err.println("Error executing step: " + e.getMessage());
+                } finally {                     
+                    System.out.println("--- End of Step ---\n");
+                } 
+           
+        });}
         System.out.println("--- 🏁 DEBUG SESSION COMPLETE ---\n");
     }
 
@@ -291,8 +318,8 @@ public class CypherDebugger {
     return segment instanceof org.neo4j.cypherdsl.core.Comparison;
 }
 
-   public List<String> decompose(Statement statement) {
-    List<String> trace = new ArrayList<>();
+   public List<TraceStep> decompose(Statement statement) {
+    List<TraceStep> trace = new ArrayList<>();
     Renderer renderer = Renderer.getDefaultRenderer();
     final List<Node> nodes = new ArrayList<>();
     final List<PatternElement> patterns = new ArrayList<>();
@@ -311,7 +338,7 @@ public class CypherDebugger {
     });
 
    for (Node n : nodes) {
-        trace.add(renderer.render(Cypher.match(n).returning(n).build()));
+        trace.add(new TraceStep(trace.size(), renderer.render(Cypher.match(n).returning(n).build()), "Node: " + n.toString()));
     }
     
    
@@ -319,7 +346,7 @@ public class CypherDebugger {
     for (PatternElement p : patterns) {
         if (p instanceof Relationship rel) {
             lastRel = rel;
-            trace.add(renderer.render(Cypher.match(rel).returning(rel).build()));
+            trace.add(new TraceStep(trace.size(), renderer.render(Cypher.match(rel).returning(rel).build()), "Relationship: " + rel.toString()));
         }
     }
 
@@ -328,56 +355,25 @@ for (Expression cond : extractedCondition) {
     Condition validCondition = cond.asCondition();
 
     
-    trace.add(renderer.render(
+    trace.add(new TraceStep(trace.size(), renderer.render(
         Cypher.match(lastRel)
               .where(validCondition)
               .returning(lastRel)
               .build()
-    ));
+    ), "Condition: " + validCondition));
 }
-
+    trace.add(new TraceStep(trace.size(), renderer.render(statement), "Full Query: " + statement.getCypher()));
     return trace;
 }
-    
 
  
 
     public static void main(String[] args) {
         CypherDebugger debugger = new CypherDebugger("bolt://localhost:7687", "neo4j", "neo4jalmeria00");
-
-        debugger.decompose(CypherParser.parse("MATCH (p:Person {name: \"Tom Hanks\"})-[:ACTED_IN]->(m:Movie)<-[:DIRECTED]-(d:Person {name: \"Christopher Nolan\"}) WHERE m.released > 2010 RETURN m.title"))
-            .forEach(step -> {
-                System.out.println("\n--- Step ---");
-                System.out.println(step);
-                Session session = debugger.driver.session();
-                try {
-                    Result res = session.run(step);
-                   if (res.hasNext()) {
-                        boolean exists = res.hasNext(); // Just check if it returns any result
-                        System.out.println("Step executed successfully. Results found: " + exists);
-                    } else {
-                        System.out.println("The error is found in this step.");
-                        System.out.println("No results returned for this step, indicating a potential issue with the pattern or condition.");
-                        return; // Stop further execution
-
-}
-                } catch (Exception e) {
-                    System.err.println("Error executing step: " + e.getMessage());
-                } finally {                    session.close();
-                } 
-           
-           
-            });
-
-        // Example with a logical condition that might fail (e.g., movies from the
-        // future)
-       /*  String testQuery = "MATCH (p:Person {name: \"Tom Hanks\"})-[:ACTED_IN]\n" + //
-                        "->(m:Movie)<-[:DIRECTED]-(d:Person {name: \"Christopher Nolan\"})\n" + //
-                        "WHERE m.released > 2010 RETURN m.title";
-
+        String testQuery = "MATCH (p:Person {name: \"Tom Hanks\"})-[:ACTED_IN]->(m:Movies)<-[:DIRECTED]-(d:Person {name: \"Christopher Nolan\"}) WHERE m.released > 2009 RETURN m.title";
         debugger.debug(testQuery);
         debugger.close();
 
-        */
+        
     }
 }
