@@ -2,7 +2,7 @@
 
 **DebCypher** is an automated debugging framework for the Cypher graph query language. It addresses the "Empty Answer" problem (Why-Not provenance) by programmatically deconstructing complex declarative patterns into a sequence of testable sub-queries to isolate the exact point of failure.
 
-This implementation is the practical companion to the research paper: *"Design and Implementation of a Specialized Debugger for the Cypher Graph Database Query Language."*
+ 
 
 ---
 
